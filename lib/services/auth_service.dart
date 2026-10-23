@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -14,8 +15,22 @@ class AuthService {
   }
 
   Future<void> cadastrar(String email, String senha) async {
-    await _auth.createUserWithEmailAndPassword(email: email, password: senha);
-  }
+    UserCredential credential = await _auth.createUserWithEmailAndPassword(
+      email: email, 
+      password: senha,
+    );
 
+    if (credential.user != null) {
+      // Cria o documento de perfil do usuário na coleção raiz "usuarios"
+      await FirebaseFirestore.instance
+          .collection('usuarios')
+          .doc(credential.user!.uid)
+          .set({
+        'email': credential.user!.email,
+        'dataCriacao': FieldValue.serverTimestamp(),
+      });
+    }
+  }
+   
   Future<void> sair() => _auth.signOut();
 }

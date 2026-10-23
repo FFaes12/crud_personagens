@@ -1,35 +1,58 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-import '../models/personagem.dart';
+class PersonagemService {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
 
-class PersonagemService{
-  final FirebaseFirestore firestore = FirebaseFirestore.instance;
-
-  // UID do usuário logado
-  String get _uid => FirebaseAuth.instance.currentUser!.uid;
-
-  CollectionReference<Map<String, dynamic>> get _colecao => firestore.collection('personagens');
-
-  Future<void> criarHeroi (Personagem p) async{
-    final dados = p.toMap();
-    dados['userId'] = _uid; // marca invisível do usuário que está criando personagem
-    await _colecao.add(dados);
+  String get _uid {
+    final user = _auth.currentUser;
+    if (user == null) throw Exception("Usuário não está logado");
+    return user.uid;
   }
 
-  Stream<QuerySnapshot<Map<String, dynamic>>> listarPersonagens(){
-    //return _colecao.snapshots(); //agora que há login, aqui muda para:
-    // a "peneira". Só irão aparecer os personagens do usuário logado
-    return _colecao.where('userId', isEqualTo: _uid).snapshots();
+  // --- PARTE 1: CRUD DE PERSONAGENS ---
+  // Adicionamos a tipagem exata <Map<String, dynamic>> aqui para a tela não reclamar
+  CollectionReference<Map<String, dynamic>> get _personagensRef =>
+      _firestore.collection('usuarios').doc(_uid).collection('personagens');
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> listarPersonagens() {
+    return _personagensRef.snapshots();
   }
 
-  Future<void> tomarDano(String id, int novaVida) async{
-    await _colecao.doc(id).update({'vida': novaVida});
+  Future<void> criarHeroi(dynamic heroi) async {
+    Map<String, dynamic> dados;
+    
+    if (heroi is Map) {
+      dados = Map<String, dynamic>.from(heroi);
+    } else {
+      dados = heroi.toMap(); 
+    }
+
+    dados.remove('userId');
+    await _personagensRef.add(dados);
   }
 
-  Future<void> deletarPersonagem(String id) async{
-    await _colecao.doc(id).delete();
+  Future<void> tomarDano(String id, int novaVida) async {
+    await _personagensRef.doc(id).update({'vida': novaVida});
   }
 
+  Future<void> deletarPersonagem(String id) async {
+    await _personagensRef.doc(id).delete();
+  }
 
+  // --- PARTE 3: FUNCIONALIDADE DE MISSÕES ---
+  CollectionReference<Map<String, dynamic>> get _missoesRef =>
+      _firestore.collection('usuarios').doc(_uid).collection('missoes');
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> getMissoes() {
+    return _missoesRef.snapshots();
+  }
+
+  Future<void> registrarMissaoConcluida(String titulo) {
+    return _missoesRef.add({
+      'titulo': titulo,
+      'concluidaEm': FieldValue.serverTimestamp(),
+    });
+  }
 }
